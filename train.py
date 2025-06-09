@@ -14,7 +14,7 @@ from Paformer import RMS_norm
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Path to all bucketed files (Training data)
-bucket_dir = "/projappl/project_2014349/Pre_Tokenized_Stream"
+bucket_dir = ""
 
 
 class ModelArgs_L:
