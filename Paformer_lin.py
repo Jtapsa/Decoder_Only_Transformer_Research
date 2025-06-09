@@ -282,55 +282,6 @@ class LargeLayer(nn.Module):
             output = self.Share(output)
         return output
 
-
-class GumbelMoE(nn.Module):
-    def __init__(self, dim_in, dim_out, temperature=1.0):
-        super().__init__()
-        self.dim_in = dim_in          # path_dim * 2
-        self.dim_path = dim_out       # path_dim
-
-        self.share_linear = nn.Linear(dim_in, dim_out)     # maps concat(attn1, attn2) to x_s
-        self.router = nn.Linear(dim_out, 3)                # maps logits to choose path
-
-        self.temperature = temperature
-
-    def gumbel_softmax(self, logits, temperature, hard=False):
-        eps = 1e-10
-        U = torch.rand_like(logits).clamp(min=eps, max=1.0)
-        gumbels = -torch.log(-torch.log(U))
-        y_soft = F.softmax((logits + gumbels) / temperature, dim=-1)
-    
-        if hard:
-            index = y_soft.argmax(dim=-1, keepdim=True)
-            y_hard = torch.zeros_like(logits).scatter(-1, index, 1.0)
-            return (y_hard - y_soft).detach() + y_soft
-        else:
-            return y_soft
-
-    def forward(self, attn1, attn2):
-        # attn1, attn2 --> (B, seq_len, path_dim)
-        combined_x = torch.cat([attn1, attn2], dim=-1)      # (B, seq_len, 2 * path_dim)
-        x_s = self.share_linear(combined_x)                 # (B, seq_len, path_dim)
-
-        router_logits = self.router(x_s)                    # (B, seq_len, 3)
-        router_probs = self.gumbel_softmax(router_logits, self.temperature, hard=True)
-    
-        router_probs_expanded = router_probs.unsqueeze(-1)
-        candidates = torch.stack([attn1, attn2, x_s], dim=2)
-        output = torch.sum(router_probs_expanded * candidates, dim=2)
-        
-        # Entropy regularization
-        entropy = -torch.sum(router_probs * torch.log(router_probs + 1e-8), dim=-1)  # (B, seq_len)
-        entropy_loss = -torch.mean(entropy)  # scalar
-
-        # Load balancing
-        mean_probs = router_probs.mean(dim=(0, 1))  # shape (3,)
-        load_balance_loss = -torch.sum(mean_probs * torch.log(mean_probs + 1e-8))  # scalar
-
-        return output, entropy_loss, load_balance_loss
-
-
-
 class Decoder(nn.Module):
     def __init__(self, args, args_paraller):
         super().__init__()
