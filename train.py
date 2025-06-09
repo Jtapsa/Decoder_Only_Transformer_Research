@@ -8,12 +8,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from Paformer_v3 import Decoder
-from Paformer_v3 import RMS_norm
+from Paformer import Decoder
+from Paformer import RMS_norm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Path to all bucketed files
+# Path to all bucketed files (Training data)
 bucket_dir = "/projappl/project_2014349/Pre_Tokenized_Stream"
 
 
@@ -153,7 +153,7 @@ def evaluate_on_all_buckets(model, val_files, args):
                 batch = batch.to(args.device)
                 labels = batch.clone()
                 labels[:, :-1] = batch[:, 1:]
-                logits, _, _ = model(batch)
+                logits, _, _ = model(batch) # If model not gumble moe varaint, change --> logits = model(batch)
                 loss = F.cross_entropy(logits.transpose(1, 2), labels, ignore_index=args.pad_id)
                 total_loss += loss.item()
                 total_batches += 1
@@ -168,7 +168,7 @@ def train(args,args_parallel, grad_accum_steps=8, use_scheduler=True, scheduler_
     model.apply(init_weights)
     load_pre_trained_weights(model)
     
-    # Freeze pre-trained parameters form Path_1 and Path_2
+    # Freeze pre-trained parameters from Path_1 and Path_2
     #for name, param in model.named_parameters():
         #if not any(x in name for x in ["Share", "MoE", "LargeLayer"]):
             #param.requires_grad = False
@@ -257,7 +257,7 @@ def train(args,args_parallel, grad_accum_steps=8, use_scheduler=True, scheduler_
             labels = batch.clone()
             labels[:, :-1] = batch[:, 1:]
                 
-            logits, entropy_total, load_total = model(batch)
+            logits, entropy_total, load_total = model(batch) # If model not gumble moe varaint, change --> logits = model(batch) and remove λ_entropy, λ_load..
 
             λ_entropy = 0.01
             λ_load = 0.01
@@ -279,7 +279,7 @@ def train(args,args_parallel, grad_accum_steps=8, use_scheduler=True, scheduler_
             
             if i in milestones:
                 pct = int(100 * i / num_batches)
-                print(f"🟢 {pct}% of epoch completed...")
+                print(f" {pct}% of epoch completed...")
                 
         avg_loss = total_loss / len(train_loader)
         print(f" Avg Loss: {avg_loss:.4f} | Time: {time.time() - start_time:.1f}s")
